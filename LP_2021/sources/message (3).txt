@@ -1,0 +1,252 @@
+#include <stdio.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <string.h>
+#include <math.h>
+#include <stdarg.h>
+#include "our_ints.h"
+#include "our_doubles.h"
+
+//Exercicio A
+
+void print_system(int x, const double a[x][x+1], const char *fmt) {
+    for (int i = 0; i < x; i++)
+      doubles_printfln("%12lf", a[i], x+1);
+}
+
+void get_system(int x, double a[x][x+1]) {
+    doubles_get_some((double*)a, x*(x+1));
+}
+
+
+void test_A (void) {
+    int x = int_get();
+    double m[x][x+1];
+    get_system(x, m);
+    print_system(x, m, "%12f");
+}
+
+//Exercicio B
+int intern_product (const double *m, int x, const double *a) {
+    double y = 0;
+    int i = 0;
+    while (i < x) {
+        y += a[i]*m[i];
+        i++;
+    }
+    return y == m[x];
+}
+
+
+int check_solution (int x, const double m[x][x+1], const double *a, int n) {
+    int result = 0;
+    for (int i = 0; i < n; i++)
+        result += intern_product((double *)m[i], x, a);
+    return result == x;
+}
+
+void test_B (void) {
+    int x = int_get();
+    double m[x][x+1];
+    get_system(x, m);
+    double a[x];
+    int n;
+    while ((n = doubles_get_some(a, x)) != 0) {
+        assert (n == x);
+        //printf("%dp\n", n);
+        int y = check_solution(x, m, a, n);
+        printf("%d\n", y);       
+    }
+}
+
+//Exercicio C
+
+void base_converter (double *c, int index, int x, int y, int w) {
+    for (int i = x-1; i >= 0; i--) {
+        int subtract = (index%y)-w;
+        c[i] = subtract;
+        index /= y;
+    }
+}
+
+void brute_force (int x, const double m[x][x+1], int y, double *c) {
+    int base = (y*2)+1;
+    int i = 0;
+    int r = 0;
+    while (i < pow(base, x) && r == 0) {
+        base_converter(c, i, x, base, y);
+        r = check_solution(x, m, c, x);
+        i++;
+    }
+    if (r == 1)
+        doubles_println_basic(c, x);
+    else
+        printf("***\n");
+}
+
+void test_C (void) {
+    int x = int_get();
+    double m[x][x+1];
+    get_system(x, m);
+    int y;
+    double c[x];
+    while (scanf("%d", &y) != EOF) {
+        brute_force(x, m, y, c);
+    }
+}
+
+//Exercicio D
+
+void get_result (int x, const double m[x][x+1], double *a) {
+    for (int i = 0; i < x; i++) {
+        a[i] = m[i][x];
+    }
+}
+
+void line_subtract (int x, double *m, double *m1) {
+    for (int i = 0; i < x+1; i++)
+        m[i] = m[i] - m1[i];
+}
+
+void subtract_row (int x, double m[x][x+1], int line) {
+    for (int i = 0; i < x; i++)
+        if(i != line && m[i][line] != 0.0)
+            line_subtract (x, m[i], m[line]);
+}
+
+void line_division (int x, double *m, double div) {
+    for (int i = 0; i < x+1; i++)
+        m[i] = m[i] / div;
+}
+
+void columnize (int x, double m[x][x+1], int y) {
+    for (int i = 0; i < x; i++)
+        if (m[i][y] != 0.0) 
+            line_division(x, (double *)m[i], m[i][y]);
+}
+
+void upward (int x, double m[x][x+1]) {
+    for (int i = x-1; i >= 0; i--) {
+        columnize(x, m, i);
+        subtract_row(x, m, i);
+    }
+}
+
+void downward (int x, double m[x][x+1]) {
+    for (int i = 0; i < x; i++) {
+        columnize(x, m, i);
+        subtract_row(x, m, i);
+    }
+}
+
+void test_D (void) {
+    int x = int_get();
+    double m[x][x+1];
+    get_system(x, m);
+    downward (x, m);
+    upward(x, m);
+    double a[x];
+    get_result(x, m, a);
+    doubles_println(a, x, " ");
+}
+
+
+//Exercicio E
+
+// error: print an error message and die. From K&R, page 174.
+void error(const char *fmt, ...)
+{
+ va_list args;
+ va_start(args, fmt);
+ vfprintf(stdout, fmt, args);
+ fprintf(stdout, "\n");
+ va_end(args);
+ exit(0);
+}
+
+void epsilonify(int n, double a[n][n+1], double epsilon) {
+    double *p = &a[0][0];
+    for (int i = 0; i < n*(n+1); i++)
+        if (p[i] < epsilon && p[i] > -1*epsilon)
+            p[i] = 0.0;
+}
+
+void change_line (int x, double *m, double *m1) {
+    double temp[x];
+    doubles_copy(m, x, temp);
+    doubles_copy(m1, x, m);
+    doubles_copy(temp, x, m1);
+}
+
+void see_pivot0 (int x, double m[x][x+1], int y) {
+    int i = y;
+    int r = 0;
+    while (i < x && r == 0) {
+        i++;
+        if (m[i][y] != 0.0) {
+            change_line (x+1, m[i], m[y]);
+            r = 1;
+        }
+    }
+    if (i == x)
+        error("System is impossible or indeterminate. Computation halted.");
+}
+
+void upward_2 (int x, double m[x][x+1]) {
+    for (int i = x-1; i >= 0; i--) {
+        if (m[i][i] == 0.0)
+            see_pivot0(x, m, i);
+        columnize(x, m, i);
+        subtract_row(x, m, i);
+        epsilonify (x, m, 10e-13);
+    }
+}
+
+void downward_2 (int x, double m[x][x+1]) {
+    for (int i = 0; i < x; i++) {
+        if (m[i][i] == 0.0)
+            see_pivot0(x, m, i);
+        columnize(x, m, i);
+        subtract_row(x, m, i);
+        epsilonify (x, m, 10e-13);
+    }
+}
+
+void change_0 (int x, double m[x][x+1]) {
+    double *p = &m[0][0];
+    for (int i = 0; i < x; i++) {
+        if (p[i] == 0) p[i] = 0;
+    }
+}
+
+void test_E (void) {
+    int x = int_get();
+    double m[x][x+1];
+    get_system(x, m);
+    downward_2 (x, m);
+    upward_2 (x, m);
+    change_0 (x, m);
+    double a[x];
+    get_result(x, m, a);
+    doubles_println(a, x, " ");
+}
+
+
+int main (int argc, char **argv) {
+    int x = 'A';
+    if (argc > 1)
+        x = *argv[1];
+    if (x == 'A')
+        test_A();
+    else if (x == 'B')
+        test_B();
+    else if (x == 'C')
+        test_C();
+    else if (x == 'D')
+        test_D();
+    else if (x == 'E')
+        test_E();
+    else
+        printf("%s: Invalid option.\n", argv[1]);
+}
